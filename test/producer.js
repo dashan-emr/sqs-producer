@@ -427,7 +427,7 @@ describe('Producer', function () {
     });
   });
 
-  it('returns an error identifting the messages that failed', function (done) {
+  it('returns an error identifying the messages that failed', function (done) {
     sqs.sendMessageBatch.restore();
 
     var failedMessages = [{
@@ -445,6 +445,34 @@ describe('Producer', function () {
       assert.equal(err.message, 'Failed to send messages: message1, message2, message3');
       done();
     });
+  });
+
+  it('retries an error for a failed message', function (done) {
+    sqs.sendMessageBatch.restore();
+
+    var failedMessages = [{
+      Id: 'message1'
+    }];
+    sinon.stub(sqs, 'sendMessageBatch').yields(null, {
+      Failed: failedMessages
+    });
+
+    var p = new Producer({
+      queueUrl: queueUrl,
+      sqs: sqs,
+      retries: 2,
+      retryInterval: 0.001,
+      // debugToConsole: true
+    });
+
+    sinon.spy(p, 'send');
+    p.send(['message1'], function (err) {
+      assert.equal(err.message, 'Failed to send messages: message1');
+    });
+    setTimeout(function() {
+      sinon.assert.calledThrice(p.send);
+      done();
+    }, 30);
   });
 
   it('returns the approximate size of the queue', function (done) {
